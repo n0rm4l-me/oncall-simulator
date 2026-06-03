@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>On-Call Simulator</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0d1117;--surface:#161b22;--border:#30363d;
+      --green:#3fb950;--red:#f85149;--yellow:#d29922;
+      --blue:#58a6ff;--muted:#8b949e;--text:#e6edf3;--orange:#ffa657;
+    }
+    body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
+         height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+    /* header */
+    #hdr{background:var(--surface);border-bottom:1px solid var(--border);
+         padding:0 20px;height:44px;display:flex;align-items:center;
+         justify-content:space-between;flex-shrink:0}
+    .logo{color:var(--red);font-weight:bold;font-size:.93rem;letter-spacing:2px}
+    .logo span{color:var(--text)}
+    #stats{display:flex;gap:7px;align-items:center}
+    .sb{display:flex;align-items:center;gap:6px;background:var(--bg);
+        border:1px solid var(--border);border-radius:4px;
+        padding:0 10px;height:26px;font-size:.76rem;white-space:nowrap}
+    .sl{color:var(--muted)}.sv{font-weight:bold;min-width:3ch;text-align:right}
+    #vt{color:var(--yellow);min-width:4.5ch}
+    #vt.crit{color:var(--red);animation:blink .5s infinite}
+    #vs{color:var(--green)}#vk{color:var(--orange)}
+    @keyframes blink{50%{opacity:.3}}
+
+    /* sla bar */
+    #slab{height:3px;background:var(--border);flex-shrink:0}
+    #slaf{height:100%;background:var(--green);width:100%;transition:width 1s linear,background .5s}
+
+    /* alert */
+    #ab{background:#1a1118;border-bottom:1px solid #5a1a1a;
+        padding:10px 20px;display:none;gap:12px;flex-shrink:0}
+    #ab.on{display:flex;align-items:flex-start}
+    .ai{color:var(--red);font-size:1.05rem;flex-shrink:0;padding-top:1px}
+    .abody{flex:1}
+    #at{color:var(--red);font-weight:bold;font-size:.82rem}
+    #ad{color:var(--text);font-size:.78rem;margin-top:3px;line-height:1.5}
+    #am{color:var(--muted);font-size:.72rem;margin-top:3px}
+    .hbtn{background:var(--bg);border:1px solid var(--border);border-radius:4px;
+          padding:4px 12px;font-size:.73rem;color:var(--muted);cursor:pointer;
+          align-self:center;flex-shrink:0;font-family:'Courier New',monospace}
+    .hbtn:hover{border-color:var(--blue);color:var(--blue)}
+
+    /* terminal */
+    #term{flex:1;overflow-y:auto;padding:14px 20px;font-size:.8rem;line-height:1.65}
+    .l{margin-bottom:1px;white-space:pre-wrap;word-break:break-all}
+    .ok{color:var(--text)}.err{color:var(--red)}.warn{color:var(--yellow)}
+    .info{color:var(--blue)}.dim{color:var(--muted)}.good{color:var(--green);font-weight:bold}
+    .page{color:var(--orange)}.sep{color:#21262d}
+    .pl .p{color:var(--green)}.pl .c{color:var(--text)}
+
+    /* input */
+    #inp{border-top:1px solid var(--border);background:var(--surface);
+         padding:0 20px;height:38px;display:flex;align-items:center;gap:8px;flex-shrink:0}
+    #ps{color:var(--green);font-size:.8rem;white-space:nowrap}
+    #ci{flex:1;background:transparent;border:none;outline:none;color:var(--text);
+        font-family:'Courier New',monospace;font-size:.8rem;caret-color:var(--green)}
+
+    /* overlay */
+    #ov{position:fixed;inset:0;background:rgba(0,0,0,.88);
+        display:flex;align-items:center;justify-content:center;z-index:100}
+    #ov.off{display:none}
+    .modal{background:var(--surface);border:1px solid var(--border);border-radius:8px;
+           padding:30px;max-width:500px;width:92%;text-align:center}
+    .modal h2{font-size:1.25rem;margin-bottom:6px}
+    .modal .sub{color:var(--muted);font-size:.8rem;margin-bottom:18px;line-height:1.6}
+    .big{font-size:4rem;font-weight:bold;margin:6px 0}
+    .rtable{background:var(--bg);border-radius:6px;padding:12px 14px;
+            text-align:left;margin:12px 0}
+    .rrow{display:flex;justify-content:space-between;font-size:.78rem;padding:3px 0}
+    .rrow .rl{color:var(--muted)}
+    .btn{display:inline-block;margin-top:14px;padding:8px 22px;background:var(--green);
+         color:#000;border:none;border-radius:4px;font-family:'Courier New',monospace;
+         font-size:.83rem;font-weight:bold;cursor:pointer}
+    .btn:hover{opacity:.85}
+    .btn.g{background:transparent;color:var(--muted);border:1px solid var(--border);margin-left:8px}
+    #fi{display:none}
+    .dz{font-size:.72rem;color:var(--muted);margin-top:10px;padding:7px;
+        border:1px dashed var(--border);border-radius:4px;cursor:pointer}
+    .dz:hover{border-color:var(--blue);color:var(--blue)}
+  </style>
+</head>
+<body>
+<div id="hdr">
+  <div class="logo">⚡ ON-CALL<span>_SIMULATOR</span></div>
+  <div id="stats">
+    <div class="sb"><span class="sl">SCORE</span><span class="sv" id="vs">0</span></div>
+    <div class="sb"><span class="sl">STREAK</span><span class="sv" id="vk">0🔥</span></div>
+    <div class="sb"><span class="sl">INCIDENT</span><span class="sv" id="vi">-/-</span></div>
+    <div class="sb"><span class="sl">SLA</span><span class="sv" id="vt">--:--</span></div>
+  </div>
+</div>
+<div id="slab"><div id="slaf"></div></div>
+<div id="ab">
+  <div class="ai">🚨</div>
+  <div class="abody">
+    <div id="at"></div><div id="ad"></div><div id="am"></div>
+  </div>
+  <div class="hbtn" onclick="G.hint()">💡 hint</div>
+</div>
+<div id="term"></div>
+<div id="inp">
+  <span id="ps">sre@oncall:~$</span>
+  <input id="ci" type="text" autocomplete="off" spellcheck="false" placeholder="type a command..."/>
+</div>
+<div id="ov"><div class="modal" id="mo"></div></div>
+<input type="file" id="fi" accept=".json"/>
+
+<script src="kubectl.js"></script>
+<!-- Scenarios — add new files here, they will be shuffled automatically -->
+<script src="scenarios/etcd-wal.js"></script>
+<script src="scenarios/oom-batch.js"></script>
+<script src="scenarios/date-format.js"></script>
+<script src="scenarios/node-cni.js"></script>
+<script src="scenarios/kafka-lag.js"></script>
+<script src="scenarios/index.js"></script>
+<script>
+// ── DOM helpers
+const $ = id => document.getElementById(id);
+const term = $('term');
+
+function print(text, cls='ok'){
+  const d=document.createElement('div');
+  d.className=`l ${cls}`;d.textContent=text;
+  term.appendChild(d);term.scrollTop=99999;
+}
+function printPrompt(cmd){
+  const d=document.createElement('div');
+  d.className='l pl';
+  d.innerHTML=`<span class="p">sre@oncall:~$</span> <span class="c">${esc(cmd)}</span>`;
+  term.appendChild(d);term.scrollTop=99999;
+}
+function printLines(text){
+  (text||'').split('\n').forEach(l=>print(l));
+}
+function sep(){print('─'.repeat(64),'sep')}
+function nl(){print('')}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+// ── Timer state
+let _tLeft=0,_tTotal=0,_tTimer=null;
+function startTimer(s){
+  clearInterval(_tTimer);_tLeft=s;_tTotal=s;_tick();
+  _tTimer=setInterval(()=>{
+    _tLeft--;_tick();
+    const pct=_tLeft/_tTotal;
+    $('slaf').style.width=(pct*100)+'%';
+    $('slaf').style.background=pct>.5?'#3fb950':pct>.25?'#d29922':'#f85149';
+    $('vt').className=_tLeft<=20?'sv crit':'sv';
+    if(_tLeft<=0){clearInterval(_tTimer);G.breach();}
+  },1000);
+}
+function _tick(){
+  const m=String(Math.floor(_tLeft/60)).padStart(2,'0');
+  const s=String(_tLeft%60).padStart(2,'0');
+  $('vt').textContent=`${m}:${s}`;
+}
+function stopTimer(){clearInterval(_tTimer);}
+
+// ── Game
+const G={
+  scenarios:[],score:0,streak:0,idx:0,hintsUsed:0,
+  hist:[],histIdx:-1,
+
+  cur(){return this.scenarios[this.idx];},
+
+  load(list){
+    this.scenarios=list;this.score=0;this.streak=0;this.idx=0;
+    $('ov').classList.add('off');
+    this.run();
+  },
+
+  run(){
+    const inc=this.cur();
+    if(!inc){this.end();return;}
+    this.hintsUsed=0;
+    term.innerHTML='';
+    $('slaf').style.width='100%';$('slaf').style.background='#3fb950';
+    $('vt').className='sv';
+
+    // Mount cluster state into virtual kubectl
+    KC.mount(inc.cluster);
+
+    // Alert banner
+    $('at').textContent=inc.title;
+    $('ad').textContent=inc.desc;
+    $('am').textContent=inc.meta||'';
+    $('ab').className='on';
+
+    $('vi').textContent=`${this.idx+1}/${this.scenarios.length}`;
+    $('vs').textContent=this.score;
+    $('vk').textContent=this.streak+'🔥';
+
+    sep();
+    print(`📟  PAGER ALERT — ${new Date().toISOString().replace('T',' ').slice(0,19)} UTC`,'page');
+    sep();nl();
+    print(`Investigate the incident. Type 'help' for tips, 'hint' if stuck.`,'dim');nl();
+
+    startTimer(inc.timeLimit||120);
+    $('ci').focus();
+  },
+
+  exec(raw){
+    const inc=this.cur();if(!inc)return;
+    printPrompt(raw);
+    const trimmed=raw.trim();
+    if(!trimmed)return;
+    this.hist.unshift(trimmed);this.histIdx=-1;
+
+    const lower=trimmed.toLowerCase();
+    if(lower==='hint'){this.hint();return;}
+    if(lower==='clear'){term.innerHTML='';return;}
+    if(lower==='help'){
+      print('kubectl get/describe/logs/exec/top/scale/rollout/set/delete/apply','info');
+      print('gcloud compute ssh / gcloud logging read','info');
+      print('↑↓ history  Tab autocomplete  hint  clear','dim');nl();return;
+    }
+
+    // Check solution
+    const sols=Array.isArray(inc.solution)?inc.solution:[inc.solution];
+    if(sols.some(s=>lower.includes(s.toLowerCase()))){this.solve(trimmed);return;}
+
+    // Run virtual kubectl / gcloud
+    const out=KC.run(trimmed);
+    if(out.text) printLines(out.text);
+    else if(out.error) print(out.error,'err');
+    nl();
+  },
+
+  hint(){
+    this.hintsUsed++;
+    print(`💡 HINT (-50% pts): ${this.cur().hint}`,'warn');nl();
+  },
+
+  solve(cmd){
+    stopTimer();
+    $('ab').className='';
+    const inc=this.cur();
+    const bonus=Math.floor((_tLeft/_tTotal)*(inc.points||200)*.5);
+    const pen=this.hintsUsed*Math.floor((inc.points||200)*.5);
+    const earned=Math.max(25,(inc.points||200)+bonus-pen);
+    this.score+=earned;this.streak++;
+    $('vs').textContent=this.score;$('vk').textContent=this.streak+'🔥';
+    nl();sep();
+    print(inc.successMsg||'✅ Incident resolved.','good');nl();
+    print(`🔍 ROOT CAUSE: ${inc.diagnosis}`,'info');nl();
+    print(`⏱  +${inc.points||200} base  +${bonus} speed  -${pen} hints  = +${earned} pts`,'page');
+    sep();nl();
+    setTimeout(()=>{this.idx++;this.run();},2800);
+  },
+
+  breach(){
+    $('ab').className='';this.streak=0;
+    $('vk').textContent='0🔥';
+    const inc=this.cur();
+    nl();sep();
+    print('💀 SLA BREACHED — escalated to on-call manager','err');
+    print(`   Root cause: ${inc.diagnosis}`,'dim');
+    print(`   Solution:   ${Array.isArray(inc.solution)?inc.solution[0]:inc.solution}`,'dim');
+    sep();
+    setTimeout(()=>{this.idx++;this.run();},3200);
+  },
+
+  end(){
+    stopTimer();$('ab').className='';
+    const max=this.scenarios.reduce((s,i)=>s+(i.points||200)+Math.floor((i.points||200)*.5),0);
+    const pct=Math.round((this.score/max)*100);
+    const [g,c,m]=pct>=90?['S','#ffa657','Principal SRE material 🏆']:
+      pct>=70?['A','#3fb950','Ready for prod on-call 💪']:
+      pct>=50?['B','#58a6ff','Solid debugging skills 👍']:
+      pct>=30?['C','#d29922','Keep practicing 📖']:
+              ['D','#f85149','Your pager gave up on you 📟'];
+    $('mo').innerHTML=`
+      <div style="font-size:2rem;margin-bottom:6px">📋</div>
+      <h2>INCIDENT REPORT</h2>
+      <p class="sub">All ${this.scenarios.length} incidents handled</p>
+      <div class="big" style="color:${c}">${g}</div>
+      <div style="color:${c};font-size:.83rem;margin-bottom:6px">${m}</div>
+      <div class="rtable">
+        <div class="rrow"><span class="rl">Score</span><span style="color:#3fb950;font-weight:bold">${this.score}</span></div>
+        <div class="rrow"><span class="rl">Max possible</span><span>${max}</span></div>
+        <div class="rrow"><span class="rl">Efficiency</span><span>${pct}%</span></div>
+      </div>
+      <button class="btn" onclick="G.load(G.scenarios)">▶ RUN AGAIN</button>
+      <button class="btn g" onclick="$('ov').classList.add('off')">REVIEW</button>`;
+    $('ov').classList.remove('off');
+  },
+
+  tab(){
+    const v=$('ci').value;
+    if(!v)return;
+    const inc=this.cur();if(!inc)return;
+    const cmds=KC.allCommands(inc.cluster);
+    const m=cmds.find(c=>c.startsWith(v)&&c!==v);
+    if(m)$('ci').value=m;
+  }
+};
+
+// ── Input
+$('ci').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){const v=$('ci').value;$('ci').value='';G.exec(v);}
+  else if(e.key==='ArrowUp'){e.preventDefault();G.histIdx=Math.min(G.histIdx+1,G.hist.length-1);$('ci').value=G.hist[G.histIdx]||'';}
+  else if(e.key==='ArrowDown'){e.preventDefault();G.histIdx=Math.max(G.histIdx-1,-1);$('ci').value=G.histIdx===-1?'':G.hist[G.histIdx];}
+  else if(e.key==='Tab'){e.preventDefault();G.tab();}
+});
+document.addEventListener('click',()=>$('ci').focus());
+
+// ── File drag/drop
+$('fi').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=ev=>{try{const d=JSON.parse(ev.target.result);G.load(Array.isArray(d)?d:[d]);}catch(err){alert('Invalid JSON: '+err.message);}};
+  r.readAsText(f);
+});
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',e=>{
+  e.preventDefault();const f=e.dataTransfer.files[0];
+  if(!f||!f.name.endsWith('.json'))return;
+  const r=new FileReader();
+  r.onload=ev=>{try{G.load(JSON.parse(ev.target.result));}catch{alert('Invalid JSON');}};
+  r.readAsText(f);
+});
+
+// ── Start screen
+$('mo').innerHTML=`
+  <div style="font-size:2.1rem;margin-bottom:8px">📟</div>
+  <h2 style="color:#f85149">ON-CALL SIMULATOR</h2>
+  <p class="sub">Your pager just went off.<br>
+  Debug production incidents using real kubectl commands.<br>
+  The cluster state is fully simulated — explore freely.</p>
+  <div style="background:#0d1117;border-radius:6px;padding:13px 15px;text-align:left;font-size:.75rem;color:#8b949e;line-height:1.9;margin:14px 0">
+    <div>▸ <span style="color:#58a6ff">kubectl get/describe/logs/exec/top</span> — all work</div>
+    <div>▸ <span style="color:#58a6ff">-n &lt;namespace&gt;</span> required for non-default resources</div>
+    <div>▸ <span style="color:#58a6ff">↑↓</span> history &nbsp;|&nbsp; <span style="color:#58a6ff">Tab</span> autocomplete &nbsp;|&nbsp; <span style="color:#58a6ff">hint</span></div>
+    <div>▸ Fix the incident by running the correct command</div>
+  </div>
+  <button class="btn" onclick="G.load(DEFAULT_SCENARIOS)">▶ RESPOND TO PAGE</button>
+  <div class="dz" onclick="$('fi').click()">📂 drop custom scenarios.json or click to load</div>`;
+</script>
+</body>
+</html>
