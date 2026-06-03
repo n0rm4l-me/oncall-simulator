@@ -40,7 +40,7 @@ sre@oncall:~$ kubectl exec etcd-node-3 -n kube-system -- etcdctl defrag
 
 | Command | Supported |
 |---------|-----------|
-| `kubectl get` pods/nodes/ns/deployments/daemonsets/statefulsets/services/configmaps/secrets/pvcs/events/hpa/jobs | ✅ |
+| `kubectl get` pods/nodes/ns/deployments/daemonsets/services/configmaps/secrets/pvcs/events/hpa/jobs | ✅ |
 | `kubectl describe` pod/node/deployment/daemonset/configmap | ✅ |
 | `kubectl logs <pod> -n <ns> [--tail=N] [--previous]` | ✅ |
 | `kubectl exec <pod> -n <ns> -- <cmd>` | ✅ |
